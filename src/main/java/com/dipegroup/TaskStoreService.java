@@ -2,6 +2,7 @@ package com.dipegroup;
 
 import com.dipegroup.dto.Task;
 import com.dipegroup.dto.TaskInfo;
+import com.dipegroup.store.InMemoryTaskStore;
 import com.dipegroup.store.TaskStorage;
 
 import java.util.List;
@@ -12,9 +13,16 @@ import java.util.function.Function;
 
 public class TaskStoreService {
 
-    private final TaskStorage storage;
+    private TaskStorage storage;
 
-    public TaskStoreService(TaskStorage storage) {
+    public TaskStorage getStorage() {
+        if (storage == null) {
+            storage = new InMemoryTaskStore();
+        }
+        return storage;
+    }
+
+    public void setStorage(TaskStorage storage) {
         this.storage = storage;
     }
 
@@ -27,23 +35,27 @@ public class TaskStoreService {
         Task<E> task = new Task<>(future, taskId, cancelJobFunction);
         TaskInfo taskInfo = task.getInfo();
         taskInfo.setGroupId(groupId);
-        storage.store(task);
+        getStorage().store(task);
         return task.getInfo();
     }
 
     public Optional<Task> findTask(String taskId) {
-        return storage.find(taskId);
+        return getStorage().find(taskId);
     }
 
     public List<Task> findTasks(String groupId) {
-        return storage.find(task -> Objects.equals(groupId, task.getInfo().getGroupId()));
+        return getStorage().find(task -> Objects.equals(groupId, task.getInfo().getGroupId()));
     }
 
     public List<Task> findActiveTasks() {
-        return storage.find(task -> !task.getFuture().isDone());
+        return getStorage().find(task -> !task.getFuture().isDone());
+    }
+
+    public List<Task> findCompletedTasks() {
+        return getStorage().find(task -> task.getFuture().isDone());
     }
 
     public Optional<Task> deleteTask(String taskId) {
-        return Optional.ofNullable(storage.delete(taskId));
+        return Optional.ofNullable(getStorage().delete(taskId));
     }
 }

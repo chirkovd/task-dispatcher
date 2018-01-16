@@ -2,10 +2,15 @@ package com.dipegroup;
 
 import com.dipegroup.dto.Task;
 import com.dipegroup.dto.TaskInfo;
+import com.dipegroup.exceptions.TaskDispatcherException;
+import com.dipegroup.reject.LoggingRejectResultServiceIml;
+import com.dipegroup.reject.RejectResultService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.*;
 import java.util.function.Function;
@@ -18,9 +23,22 @@ public class TaskService {
     private final ExecutorService executorService;
     private final TaskStoreService storeService;
 
+    private RejectResultService rejectResultService;
+
     public TaskService(ExecutorService executorService, TaskStoreService storeService) {
         this.executorService = executorService;
         this.storeService = storeService;
+    }
+
+    public RejectResultService getRejectResultService() {
+        if (rejectResultService == null) {
+            rejectResultService = new LoggingRejectResultServiceIml();
+        }
+        return rejectResultService;
+    }
+
+    public void setRejectResultService(RejectResultService rejectResultService) {
+        this.rejectResultService = rejectResultService;
     }
 
     public <E> TaskInfo perform(Callable<E> callable) {
@@ -55,10 +73,11 @@ public class TaskService {
                 .collect(Collectors.toList());
     }
 
+
     @SuppressWarnings("unchecked")
-    public <E> E result(String taskId) {
+    public <E> E result(String taskId) throws TaskDispatcherException {
         Task task = storeService.findTask(taskId)
-                .orElseThrow(() -> new IllegalArgumentException("task with " + taskId + " is not found"));
+                .orElseThrow(() -> new TaskDispatcherException("task with " + taskId + " is not found"));
 
         E result = null;
         try {
@@ -74,9 +93,9 @@ public class TaskService {
     }
 
     @SuppressWarnings("unchecked")
-    public <E> E result(String taskId, long timeout, TimeUnit unit) throws TimeoutException {
+    public <E> E result(String taskId, long timeout, TimeUnit unit) throws TaskDispatcherException {
         Task task = storeService.findTask(taskId)
-                .orElseThrow(() -> new IllegalArgumentException("task with " + taskId + " is not found"));
+                .orElseThrow(() -> new TaskDispatcherException("task with " + taskId + " is not found"));
 
         boolean isTimeout = false;
         E result = null;
@@ -89,7 +108,7 @@ public class TaskService {
         } catch (TimeoutException e) {
             logger.debug("Task " + taskId + " is in progress", e);
             isTimeout = true;
-            throw e;
+            throw new TaskDispatcherException("Cannot fetch result for task " + taskId, e);
         } finally {
             if (!isTimeout) {
                 completeTask(task);
@@ -98,6 +117,31 @@ public class TaskService {
         return result;
     }
 
+    public <E> Map<String, E> merge(String groupId) {
+        return storeService.findTasks(groupId).stream().map(task -> task.getInfo().getTaskId())
+                .collect(HashMap::new, (map, taskId) -> {
+                    E r = null;
+                    try {
+                        r = result(taskId);
+                    } catch (TaskDispatcherException e) {
+                        logger.debug("Cannot fetch result for task " + taskId, e);
+                    }
+                    map.put(taskId, r);
+                }, HashMap::putAll);
+    }
+
+    public <E> Map<String, E> merge(String groupId, long timeout, TimeUnit unit) {
+        return storeService.findTasks(groupId).stream().map(task -> task.getInfo().getTaskId())
+                .collect(HashMap::new, (map, taskId) -> {
+                    E r = null;
+                    try {
+                        r = result(taskId, timeout, unit);
+                    } catch (TaskDispatcherException e) {
+                        logger.debug("Cannot fetch result for task " + taskId, e);
+                    }
+                    map.put(taskId, r);
+                }, HashMap::putAll);
+    }
 
     public boolean exist(String taskId) {
         return storeService.findTask(taskId).isPresent();
@@ -116,7 +160,7 @@ public class TaskService {
             try {
                 return callable.call();
             } catch (Exception e) {
-                logger.debug("Error acquired during task " + taskId + " execution", e);
+                getRejectResultService().handle(e, taskId);
                 return null;
             }
         };
@@ -124,11 +168,14 @@ public class TaskService {
 
     private <E> void cancelTask(Task<E> task) {
         task.getFuture().cancel(true);
-        task.runCancelJob();
+        completeTask(task);
     }
 
     private <E> void completeTask(Task<E> task) {
-        logger.debug("Delete task {} from store", task.getInfo().getTaskId());
-        storeService.deleteTask(task.getInfo().getTaskId()).ifPresent(Task::runCancelJob);
+        String taskId = task.getInfo().getTaskId();
+        storeService.deleteTask(taskId).ifPresent(t -> {
+            logger.debug("Task {} was deleted from store", taskId);
+            t.runCancelJob();
+        });
     }
 }

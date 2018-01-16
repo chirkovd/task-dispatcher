@@ -19,11 +19,6 @@ public class InMemoryTaskStore implements TaskStorage {
     }
 
     @Override
-    public void store(List<Task> tasks) {
-        tasks.forEach(this::store);
-    }
-
-    @Override
     public Optional<Task> find(String taskId) {
         return Optional.ofNullable(TASK_STORE.get(taskId));
     }

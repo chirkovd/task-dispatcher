@@ -1,16 +1,15 @@
 package com.dipegroup;
 
 import com.dipegroup.dto.TaskInfo;
-import com.dipegroup.store.InMemoryTaskStore;
+import com.dipegroup.exceptions.TaskDispatcherException;
+import com.dipegroup.reject.ReThrowingErrorRejectResultServiceIml;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.*;
-import java.util.concurrent.Callable;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -22,17 +21,19 @@ class TaskServiceTest {
 
     @BeforeAll
     public static void setUp() {
-        storeService = new TaskStoreService(new InMemoryTaskStore());
+        storeService = new TaskStoreService();
         taskService = new TaskService(Executors.newFixedThreadPool(5), storeService);
+        taskService.setRejectResultService(new ReThrowingErrorRejectResultServiceIml());
     }
 
     @AfterAll
     public static void tearDown() {
         assertTrue(storeService.findActiveTasks().isEmpty(), "All started jobs should be deleted from the store");
+        assertTrue(storeService.findCompletedTasks().isEmpty(), "All completed jobs should be deleted from the store");
     }
 
     @Test
-    void testSingleLongTask() {
+    void testSingleLongTask() throws TaskDispatcherException {
         int count = 0;
         AtomicInteger counter = new AtomicInteger(count);
 
@@ -50,7 +51,7 @@ class TaskServiceTest {
     }
 
     @Test
-    void testMultipleLongTasks() {
+    void testMultipleLongTasks() throws TaskDispatcherException {
         AtomicInteger counter = new AtomicInteger(0);
 
         List<Callable<Integer>> tasks = new ArrayList<>();
@@ -75,7 +76,7 @@ class TaskServiceTest {
     }
 
     @Test
-    void testTaskCancel() {
+    void testTaskCancel() throws TaskDispatcherException {
         AtomicInteger counter = new AtomicInteger(0);
         TaskInfo info = taskService.perform(() -> {
             Thread.sleep(2000);
@@ -93,7 +94,7 @@ class TaskServiceTest {
     }
 
     @Test
-    void testTasksCancel() {
+    void testTasksCancel() throws TaskDispatcherException {
         AtomicInteger counter = new AtomicInteger(0);
 
         List<Callable<Integer>> tasks = new ArrayList<>();
@@ -120,7 +121,7 @@ class TaskServiceTest {
 
         taskService.cancelGroup(firstTask.getGroupId());
 
-        assertTrue(taskService.<Integer>result(resultInfo.getTaskId()) < 3,
+        assertNull(taskService.<Integer>result(resultInfo.getTaskId()),
                 "Tasks should be canceled, counter should not be incremented");
 
         assertFalse(taskService.exist(resultInfo.getTaskId()));
@@ -129,7 +130,7 @@ class TaskServiceTest {
     }
 
     @Test
-    void testTaskWithError() {
+    void testTaskWithError() throws TaskDispatcherException {
         TaskInfo info = taskService.perform(() -> {
             Thread.sleep(1000);
             throw new IllegalArgumentException("some arg is not valid");
@@ -140,19 +141,44 @@ class TaskServiceTest {
     }
 
     @Test
-    void testLongTaskWithTimeout() throws TimeoutException {
+    void testLongTaskWithTimeout() throws TaskDispatcherException {
         TaskInfo info = taskService.perform(() -> {
             Thread.sleep(2000);
             return 0;
         });
         assertNotNull(info, "Task info should be returned by task service");
-        assertThrows(TimeoutException.class, () -> taskService.result(info.getTaskId(), 1, TimeUnit.SECONDS));
+        assertThrows(TaskDispatcherException.class, () -> taskService.result(info.getTaskId(), 1, TimeUnit.SECONDS));
         assertEquals(0, taskService.<Integer>result(info.getTaskId(), 1500, TimeUnit.MILLISECONDS).intValue());
         assertFalse(taskService.exist(info.getTaskId()));
     }
 
     @Test
-    void testTaskWithCallback() {
+    void testLongFailedTaskWithTimeout() throws TaskDispatcherException {
+        AtomicBoolean atomicBoolean = new AtomicBoolean(false);
+        TaskInfo info = taskService.perform(() -> {
+            Thread.sleep(1000);
+            throw new IllegalArgumentException("Cannot complete task");
+        }, taskId -> () -> atomicBoolean.set(true));
+
+        assertNull(taskService.result(info.getTaskId(), 2, TimeUnit.SECONDS));
+        assertTrue(atomicBoolean.get());
+    }
+
+    @Test
+    void testLongTaskCancelWithTimeout() throws TaskDispatcherException {
+        TaskInfo info = taskService.perform(() -> {
+            Thread.sleep(3000);
+            return 0;
+        });
+        TaskInfo result = taskService.perform(() -> taskService.result(info.getTaskId(), 2, TimeUnit.SECONDS));
+        taskService.cancel(info.getTaskId());
+
+        assertFalse(taskService.exist(info.getTaskId()));
+        assertNull(taskService.result(result.getTaskId()));
+    }
+
+    @Test
+    void testTaskWithCallback() throws TaskDispatcherException {
         Map<String, AtomicInteger> externalJobs = new HashMap<>();
 
         String commandId = String.valueOf(System.currentTimeMillis());
@@ -167,5 +193,94 @@ class TaskServiceTest {
         assertTrue(externalJobs.isEmpty());
     }
 
+    @Test
+    void testFailedTaskWithId() throws TaskDispatcherException {
+        String commandId = String.valueOf(System.currentTimeMillis());
+        taskService.perform(() -> {
+            Thread.sleep(2000);
+            throw new IllegalArgumentException("Cannot proceed task with id " + commandId);
+        }, commandId);
+        assertNull(taskService.result(commandId));
+    }
 
+    @Test
+    void testTasksWithCancelFunction() throws InterruptedException {
+        Map<String, AtomicInteger> externalJobs = new HashMap<>();
+
+        String groupId = String.valueOf(System.currentTimeMillis());
+        int jobs = ThreadLocalRandom.current().nextInt(5, 10);
+
+        CountDownLatch countDownLatch = new CountDownLatch(jobs);
+        for (int i = 0; i < jobs; i++) {
+            String commandId = "task-id-" + i;
+            taskService.perform(() -> {
+                externalJobs.put(commandId, new AtomicInteger(0));
+                try {
+                    Thread.sleep(2000);
+                } finally {
+                    countDownLatch.countDown();
+                }
+                return externalJobs.get(commandId).incrementAndGet();
+            }, commandId, groupId, taskId -> () -> externalJobs.remove(taskId));
+        }
+
+        for (int i = 0; i < jobs; i++) {
+            String commandId = "task-id-" + i;
+            assertTrue(taskService.exist(commandId));
+        }
+        countDownLatch.await();
+
+        taskService.cancelGroup(groupId);
+
+        for (int i = 0; i < jobs; i++) {
+            String commandId = "task-id-" + i;
+            assertFalse(taskService.exist(commandId));
+        }
+    }
+
+    @Test
+    void testMergeTasks() {
+        String groupId = String.valueOf(System.currentTimeMillis());
+        int jobs = ThreadLocalRandom.current().nextInt(5, 10);
+
+        for (int i = 0; i < jobs; i++) {
+            String commandId = "task-id-" + i;
+            taskService.perform(() -> {
+                Thread.sleep(2000);
+                return commandId;
+            }, commandId, groupId);
+        }
+
+        Map<String, String> result = taskService.merge(groupId);
+        assertEquals(jobs, result.size());
+        result.forEach((key, value) -> {
+            assertEquals(key, value);
+            assertFalse(taskService.exist(key));
+        });
+    }
+
+    @Test
+    void testMergeTasksWithTimeout() {
+        String groupId = String.valueOf(System.currentTimeMillis());
+        int jobs = ThreadLocalRandom.current().nextInt(5, 10);
+
+        for (int i = 0; i < jobs; i++) {
+            String commandId = "task-id-" + i;
+            taskService.perform(() -> {
+                Thread.sleep(1000);
+                return commandId;
+            }, commandId, groupId);
+        }
+
+        Map<String, String> result = taskService.merge(groupId, 100, TimeUnit.MILLISECONDS);
+        assertEquals(jobs, result.size());
+        result.forEach((key, value) -> assertNull(value));
+
+        result = taskService.merge(groupId, 2000, TimeUnit.MILLISECONDS);
+
+        result.forEach((key, value) -> {
+            assertEquals(key, value);
+            assertFalse(taskService.exist(key));
+        });
+    }
 }

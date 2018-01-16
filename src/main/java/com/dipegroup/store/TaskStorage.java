@@ -10,8 +10,6 @@ public interface TaskStorage {
 
     void store(Task task);
 
-    void store(List<Task> tasks);
-
     Optional<Task> find(String taskId);
 
     List<Task> find(Predicate<Task> predicate);
