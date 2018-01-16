@@ -1,4 +1,4 @@
-package com.dipegroup;
+package com.dipegroup.dto;
 
 public class TaskInfo {
 

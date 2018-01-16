@@ -1,5 +1,9 @@
 package com.dipegroup;
 
+import com.dipegroup.dto.Task;
+import com.dipegroup.dto.TaskInfo;
+import com.dipegroup.store.TaskStorage;
+
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;

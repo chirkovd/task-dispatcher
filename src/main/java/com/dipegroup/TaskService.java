@@ -1,5 +1,7 @@
 package com.dipegroup;
 
+import com.dipegroup.dto.Task;
+import com.dipegroup.dto.TaskInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

@@ -1,4 +1,4 @@
-package com.dipegroup;
+package com.dipegroup.dto;
 
 import java.util.Optional;
 import java.util.concurrent.Future;

@@ -12,8 +12,6 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <java.version>1.8</java.version>
 
-        <spring.app.version>4.3.9.RELEASE</spring.app.version>
-
         <github.maven-plugin>0.12</github.maven-plugin>
         <github.global.server>github</github.global.server>
     </properties>

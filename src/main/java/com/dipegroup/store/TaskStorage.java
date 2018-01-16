@@ -1,4 +1,6 @@
-package com.dipegroup;
+package com.dipegroup.store;
+
+import com.dipegroup.dto.Task;
 
 import java.util.List;
 import java.util.Optional;
