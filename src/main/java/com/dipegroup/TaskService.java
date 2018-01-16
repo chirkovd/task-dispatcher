@@ -68,11 +68,13 @@ public class TaskService {
     }
 
     public <E> List<TaskInfo> perform(List<Callable<E>> callableTasks) {
-        String groupId = UUID.randomUUID().toString();
+        return perform(callableTasks, UUID.randomUUID().toString());
+    }
+
+    public <E> List<TaskInfo> perform(List<Callable<E>> callableTasks, String groupId) {
         return callableTasks.stream().map(callable -> perform(callable, UUID.randomUUID().toString(), groupId))
                 .collect(Collectors.toList());
     }
-
 
     @SuppressWarnings("unchecked")
     public <E> E result(String taskId) throws TaskDispatcherException {
@@ -175,7 +177,7 @@ public class TaskService {
         String taskId = task.getInfo().getTaskId();
         storeService.deleteTask(taskId).ifPresent(t -> {
             logger.debug("Task {} was deleted from store", taskId);
-            t.runCancelJob();
+            t.runCallback();
         });
     }
 }

@@ -8,12 +8,12 @@ public class Task<E> {
 
     private final Future<E> future;
     private final TaskInfo info;
-    private final Runnable cancelJob;
+    private final Runnable callbackJob;
 
     public Task(Future<E> future, String taskId, Function<String, Runnable> cancelJobFunction) {
         this.future = future;
         this.info = new TaskInfo(taskId);
-        this.cancelJob = Optional.ofNullable(cancelJobFunction)
+        this.callbackJob = Optional.ofNullable(cancelJobFunction)
                 .map(f -> f.apply(taskId)).orElse(null);
     }
 
@@ -25,7 +25,7 @@ public class Task<E> {
         return info;
     }
 
-    public void runCancelJob() {
-        Optional.ofNullable(cancelJob).ifPresent(Runnable::run);
+    public void runCallback() {
+        Optional.ofNullable(callbackJob).ifPresent(Runnable::run);
     }
 }
