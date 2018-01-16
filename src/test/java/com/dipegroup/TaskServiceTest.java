@@ -33,7 +33,7 @@ class TaskServiceTest {
     }
 
     @Test
-    void testSingleLongTask() throws TaskDispatcherException {
+    public void testSingleLongTask() throws TaskDispatcherException {
         int count = 0;
         AtomicInteger counter = new AtomicInteger(count);
 
@@ -51,7 +51,7 @@ class TaskServiceTest {
     }
 
     @Test
-    void testMultipleLongTasks() throws TaskDispatcherException {
+    public void testMultipleLongTasks() throws TaskDispatcherException {
         AtomicInteger counter = new AtomicInteger(0);
 
         List<Callable<Integer>> tasks = new ArrayList<>();
@@ -76,7 +76,7 @@ class TaskServiceTest {
     }
 
     @Test
-    void testTaskCancel() throws TaskDispatcherException {
+    public void testTaskCancel() throws TaskDispatcherException {
         AtomicInteger counter = new AtomicInteger(0);
         TaskInfo info = taskService.perform(() -> {
             Thread.sleep(2000);
@@ -94,7 +94,7 @@ class TaskServiceTest {
     }
 
     @Test
-    void testTasksCancel() throws TaskDispatcherException {
+    public void testTasksCancel() throws TaskDispatcherException {
         AtomicInteger counter = new AtomicInteger(0);
 
         List<Callable<Integer>> tasks = new ArrayList<>();
@@ -130,7 +130,7 @@ class TaskServiceTest {
     }
 
     @Test
-    void testTaskWithError() throws TaskDispatcherException {
+    public void testTaskWithError() throws TaskDispatcherException {
         TaskInfo info = taskService.perform(() -> {
             Thread.sleep(1000);
             throw new IllegalArgumentException("some arg is not valid");
@@ -141,7 +141,7 @@ class TaskServiceTest {
     }
 
     @Test
-    void testLongTaskWithTimeout() throws TaskDispatcherException {
+    public void testLongTaskWithTimeout() throws TaskDispatcherException {
         TaskInfo info = taskService.perform(() -> {
             Thread.sleep(2000);
             return 0;
@@ -153,7 +153,7 @@ class TaskServiceTest {
     }
 
     @Test
-    void testLongFailedTaskWithTimeout() throws TaskDispatcherException {
+    public void testLongFailedTaskWithTimeout() throws TaskDispatcherException {
         AtomicBoolean atomicBoolean = new AtomicBoolean(false);
         TaskInfo info = taskService.perform(() -> {
             Thread.sleep(1000);
@@ -165,7 +165,7 @@ class TaskServiceTest {
     }
 
     @Test
-    void testLongTaskCancelWithTimeout() throws TaskDispatcherException {
+    public void testLongTaskCancelWithTimeout() throws TaskDispatcherException {
         TaskInfo info = taskService.perform(() -> {
             Thread.sleep(3000);
             return 0;
@@ -178,7 +178,7 @@ class TaskServiceTest {
     }
 
     @Test
-    void testTaskWithCallback() throws TaskDispatcherException {
+    public void testTaskWithCallback() throws TaskDispatcherException {
         Map<String, AtomicInteger> externalJobs = new HashMap<>();
 
         String commandId = String.valueOf(System.currentTimeMillis());
@@ -194,7 +194,7 @@ class TaskServiceTest {
     }
 
     @Test
-    void testFailedTaskWithId() throws TaskDispatcherException {
+    public void testFailedTaskWithId() throws TaskDispatcherException {
         String commandId = String.valueOf(System.currentTimeMillis());
         taskService.perform(() -> {
             Thread.sleep(2000);
@@ -204,7 +204,7 @@ class TaskServiceTest {
     }
 
     @Test
-    void testTasksWithCancelFunction() throws InterruptedException {
+    public void testTasksWithCancelFunction() throws InterruptedException {
         Map<String, AtomicInteger> externalJobs = new HashMap<>();
 
         String groupId = String.valueOf(System.currentTimeMillis());
@@ -239,7 +239,7 @@ class TaskServiceTest {
     }
 
     @Test
-    void testMergeTasks() {
+    public void testMergeTasks() {
         String groupId = String.valueOf(System.currentTimeMillis());
         int jobs = ThreadLocalRandom.current().nextInt(5, 10);
 
@@ -260,7 +260,7 @@ class TaskServiceTest {
     }
 
     @Test
-    void testMergeTasksWithTimeout() {
+    public void testMergeTasksWithTimeout() {
         String groupId = String.valueOf(System.currentTimeMillis());
         int jobs = ThreadLocalRandom.current().nextInt(5, 10);
 
