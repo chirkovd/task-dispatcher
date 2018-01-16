@@ -113,6 +113,7 @@ class TaskServiceTest {
         TaskInfo secondTask = info.get(1);
 
         TaskInfo resultInfo = taskService.perform(() -> {
+            Thread.sleep(1000);
             int result = 0;
             result += Optional.ofNullable(taskService.<Integer>result(firstTask.getTaskId())).orElse(0);
             result += Optional.ofNullable(taskService.<Integer>result(secondTask.getTaskId())).orElse(0);
