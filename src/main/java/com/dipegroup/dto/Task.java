@@ -2,7 +2,6 @@ package com.dipegroup.dto;
 
 import java.util.Optional;
 import java.util.concurrent.Future;
-import java.util.function.Function;
 
 public class Task<E> {
 
@@ -10,11 +9,11 @@ public class Task<E> {
     private final TaskInfo info;
     private final Runnable callbackJob;
 
-    public Task(Future<E> future, String taskId, Function<String, Runnable> cancelJobFunction) {
+    public Task(Future<E> future, TaskOptions options) {
         this.future = future;
-        this.info = new TaskInfo(taskId);
-        this.callbackJob = Optional.ofNullable(cancelJobFunction)
-                .map(f -> f.apply(taskId)).orElse(null);
+        this.info = new TaskInfo(options.getTaskId());
+        this.callbackJob = Optional.ofNullable(options.getCallback())
+                .map(f -> f.apply(options.getTaskId())).orElse(null);
     }
 
     public Future<E> getFuture() {

@@ -4,6 +4,7 @@ import com.dipegroup.dto.TaskInfo;
 import com.dipegroup.dto.TaskOptions;
 import com.dipegroup.exceptions.TaskDispatcherException;
 import com.dipegroup.reject.ReThrowingErrorRejectResultServiceIml;
+import com.dipegroup.store.InMemoryTaskStore;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -23,6 +24,7 @@ public class TaskServiceTest {
     @BeforeAll
     public static void setUp() {
         storeService = new TaskStoreService();
+        storeService.setStorage(new InMemoryTaskStore());
         taskService = new TaskService(Executors.newFixedThreadPool(5), storeService);
         taskService.setRejectResultService(new ReThrowingErrorRejectResultServiceIml());
     }

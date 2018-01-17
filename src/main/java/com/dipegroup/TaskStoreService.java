@@ -27,7 +27,7 @@ public class TaskStoreService {
     }
 
     public <E> TaskInfo storeTask(Future<E> future, TaskOptions options) {
-        Task<E> task = new Task<>(future, options.getTaskId(), options.getCallback());
+        Task<E> task = new Task<>(future, options);
 
         TaskInfo taskInfo = task.getInfo();
         if (options.getGroupId() == null) {
