@@ -2,6 +2,7 @@ package com.dipegroup;
 
 import com.dipegroup.dto.Task;
 import com.dipegroup.dto.TaskInfo;
+import com.dipegroup.dto.TaskOptions;
 import com.dipegroup.exceptions.TaskDispatcherException;
 import com.dipegroup.reject.LoggingRejectResultServiceIml;
 import com.dipegroup.reject.RejectResultService;
@@ -13,7 +14,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.*;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 public class TaskService {
@@ -42,29 +42,11 @@ public class TaskService {
     }
 
     public <E> TaskInfo perform(Callable<E> callable) {
-        return perform(callable, UUID.randomUUID().toString());
+        return perform(callable, new TaskOptions(UUID.randomUUID().toString()));
     }
 
-    public <E> TaskInfo perform(Callable<E> callable, Function<String, Runnable> cancelJob) {
-        return perform(callable, UUID.randomUUID().toString(), cancelJob);
-    }
-
-    public <E> TaskInfo perform(Callable<E> callable, String taskId) {
-        return storeService.storeTask(executorService.submit(wrapCallable(callable, taskId)), taskId, null);
-    }
-
-    public <E> TaskInfo perform(Callable<E> callable, String taskId, Function<String, Runnable> cancelJob) {
-        return storeService.storeTask(executorService.submit(wrapCallable(callable, taskId)), taskId, cancelJob);
-    }
-
-    public <E> TaskInfo perform(Callable<E> callable, String taskId, String groupId) {
-        return storeService.storeTask(executorService.submit(wrapCallable(callable, taskId)), taskId, groupId, null);
-    }
-
-    public <E> TaskInfo perform(Callable<E> callable, String taskId, String groupId,
-                                Function<String, Runnable> cancelJob) {
-        return storeService.storeTask(executorService
-                .submit(wrapCallable(callable, taskId)), taskId, groupId, cancelJob);
+    public <E> TaskInfo perform(Callable<E> callable, TaskOptions options) {
+        return storeService.storeTask(executorService.submit(wrapCallable(callable, options.getTaskId())), options);
     }
 
     public <E> List<TaskInfo> perform(List<Callable<E>> callableTasks) {
@@ -72,7 +54,13 @@ public class TaskService {
     }
 
     public <E> List<TaskInfo> perform(List<Callable<E>> callableTasks, String groupId) {
-        return callableTasks.stream().map(callable -> perform(callable, UUID.randomUUID().toString(), groupId))
+        return callableTasks.stream().map(callable -> perform(callable,
+                new TaskOptions(UUID.randomUUID().toString()).setGroupId(groupId))).collect(Collectors.toList());
+    }
+
+    public <E> List<TaskInfo> perform(List<Callable<E>> callableTasks, TaskOptions options) {
+        return callableTasks.stream()
+                .map(callable -> perform(callable, new TaskOptions(options)))
                 .collect(Collectors.toList());
     }
 

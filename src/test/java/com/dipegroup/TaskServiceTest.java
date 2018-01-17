@@ -1,6 +1,7 @@
 package com.dipegroup;
 
 import com.dipegroup.dto.TaskInfo;
+import com.dipegroup.dto.TaskOptions;
 import com.dipegroup.exceptions.TaskDispatcherException;
 import com.dipegroup.reject.ReThrowingErrorRejectResultServiceIml;
 import org.junit.jupiter.api.AfterAll;
@@ -14,7 +15,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-class TaskServiceTest {
+public class TaskServiceTest {
 
     private static TaskStoreService storeService;
     private static TaskService taskService;
@@ -156,10 +157,13 @@ class TaskServiceTest {
     @Test
     public void testLongFailedTaskWithTimeout() throws TaskDispatcherException {
         AtomicBoolean atomicBoolean = new AtomicBoolean(false);
+
+        TaskOptions options = new TaskOptions(UUID.randomUUID().toString())
+                .setCallback(taskId -> () -> atomicBoolean.set(true));
         TaskInfo info = taskService.perform(() -> {
             Thread.sleep(1000);
             throw new IllegalArgumentException("Cannot complete task");
-        }, taskId -> () -> atomicBoolean.set(true));
+        }, options);
 
         assertNull(taskService.result(info.getTaskId(), 2, TimeUnit.SECONDS));
         assertTrue(atomicBoolean.get());
@@ -183,11 +187,14 @@ class TaskServiceTest {
         Map<String, AtomicInteger> externalJobs = new HashMap<>();
 
         String commandId = String.valueOf(System.currentTimeMillis());
+        TaskOptions options = new TaskOptions(commandId)
+                .setCallback(taskId -> () -> externalJobs.remove(taskId));
+
         taskService.perform(() -> {
             externalJobs.put(commandId, new AtomicInteger(0));
             Thread.sleep(2000);
             return externalJobs.get(commandId).incrementAndGet();
-        }, commandId, taskId -> () -> externalJobs.remove(taskId));
+        }, options);
 
         assertEquals(1, taskService.<Integer>result(commandId).intValue());
         assertFalse(taskService.exist(commandId));
@@ -197,10 +204,11 @@ class TaskServiceTest {
     @Test
     public void testFailedTaskWithId() throws TaskDispatcherException {
         String commandId = String.valueOf(System.currentTimeMillis());
+        TaskOptions options = new TaskOptions(commandId);
         taskService.perform(() -> {
             Thread.sleep(2000);
             throw new IllegalArgumentException("Cannot proceed task with id " + commandId);
-        }, commandId);
+        }, options);
         assertNull(taskService.result(commandId));
     }
 
@@ -212,8 +220,12 @@ class TaskServiceTest {
         int jobs = ThreadLocalRandom.current().nextInt(5, 10);
 
         CountDownLatch countDownLatch = new CountDownLatch(jobs);
+
         for (int i = 0; i < jobs; i++) {
             String commandId = "task-id-" + i;
+
+            TaskOptions options = new TaskOptions(commandId)
+                    .setGroupId(groupId).setCallback(taskId -> () -> externalJobs.remove(taskId));
             taskService.perform(() -> {
                 externalJobs.put(commandId, new AtomicInteger(0));
                 try {
@@ -222,7 +234,7 @@ class TaskServiceTest {
                     countDownLatch.countDown();
                 }
                 return externalJobs.get(commandId).incrementAndGet();
-            }, commandId, groupId, taskId -> () -> externalJobs.remove(taskId));
+            }, options);
         }
 
         for (int i = 0; i < jobs; i++) {
@@ -246,10 +258,11 @@ class TaskServiceTest {
 
         for (int i = 0; i < jobs; i++) {
             String commandId = "task-id-" + i;
+            TaskOptions options = new TaskOptions(commandId).setGroupId(groupId);
             taskService.perform(() -> {
                 Thread.sleep(2000);
                 return commandId;
-            }, commandId, groupId);
+            }, options);
         }
 
         Map<String, String> result = taskService.merge(groupId);
@@ -267,10 +280,12 @@ class TaskServiceTest {
 
         for (int i = 0; i < jobs; i++) {
             String commandId = "task-id-" + i;
+
+            TaskOptions options = new TaskOptions(commandId).setGroupId(groupId);
             taskService.perform(() -> {
                 Thread.sleep(1000);
                 return commandId;
-            }, commandId, groupId);
+            }, options);
         }
 
         Map<String, String> result = taskService.merge(groupId, 100, TimeUnit.MILLISECONDS);

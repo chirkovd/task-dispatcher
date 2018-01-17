@@ -34,6 +34,9 @@ Method 'result' automatically remove task from the store after loading result
     ... // add required tasks to collection
     
     List<TaskInfo> info = taskService.perform(tasks);
+    
+    String groupId = "groupId";
+    List<TaskInfo> info = taskService.perform(tasks, groupId);
 ```
 
 Returned list *info* contains information about all started tasks (all task would have same *groupId* and auto generated UUID.randomUUID() *taskId*)
@@ -76,11 +79,13 @@ Started tasks results can be collected to the map
 ## Start task with callback function
 
 ```
-    TaskInfo info = taskService.perform(() -> {
-            return <T> ... // result of long running task
-        }, taskId -> () -> {
+
+    TaskOptions options = new TaskOptions(commandId).setCallback(taskId -> () -> {
             ... // execute some staff related to started task
         });
+    TaskInfo info = taskService.perform(() -> {
+            return <T> ... // result of long running task
+        }, options);
 ```
 
 Callback function would be executed after calling *result* method.
